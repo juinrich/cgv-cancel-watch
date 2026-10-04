@@ -4,7 +4,12 @@ import os
 import sys
 import tempfile
 
-from seat_state import rising, load, save
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
+from seat_state import rising, load, save, expired
+
+KST = ZoneInfo("Asia/Seoul")
 
 
 def check(name, cond):
@@ -53,6 +58,20 @@ def main():
         p = os.path.join(d, "seats.json")
         open(p, "w").write("{깨진 json")
         ok &= check("깨진 기록은 빈 dict로 취급", load(p) == {})
+
+    # ── 감시 수명 (stop_after) ──
+    # watch.py 는 시작할 때만 stop_after 를 봤다. 상시 실행하면 종료 시각이
+    # 지나도 계속 돌기 때문에 루프 안에서도 확인해야 한다.
+    LIMIT = "2026-10-06T18:30:00+09:00"
+    before = datetime(2026, 10, 6, 18, 29, tzinfo=KST)
+    after = datetime(2026, 10, 6, 18, 31, tzinfo=KST)
+
+    ok &= check("종료 시각 전이면 계속한다", expired(LIMIT, before) is False)
+    ok &= check("종료 시각 후면 멈춘다", expired(LIMIT, after) is True)
+    ok &= check("stop_after 가 없으면 계속한다", expired(None, after) is False)
+    ok &= check("stop_after 가 빈 문자열이면 계속한다", expired("", after) is False)
+    ok &= check("형식이 깨졌으면 계속한다 (멋대로 멈추지 않는다)",
+                expired("어제까지", after) is False)
 
     print("\n결과:", "전부 통과" if ok else "실패 있음")
     return 0 if ok else 1

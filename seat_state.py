@@ -13,6 +13,7 @@
 
 import json
 import os
+from datetime import datetime
 
 
 def load(path):
@@ -50,3 +51,22 @@ def rising(prev, cur):
         if after > before:
             out.append((key, before, after))
     return out
+
+
+def expired(stop_after, now):
+    """감시 종료 시각이 지났으면 True.
+
+    watch.py 는 원래 시작 시점에만 stop_after 를 확인했다. Actions 처럼
+    15분 토막으로 끊길 때는 그걸로 충분했지만, 로컬에서 상시 실행하면
+    종료 시각이 지나도 계속 돌기 때문에 루프 안에서도 확인해야 한다.
+
+    값이 없거나 형식이 깨졌으면 False — 감시를 멋대로 멈추지 않는다.
+    (멈춰야 할 때 안 멈추는 쪽이, 돌아야 할 때 멈추는 쪽보다 낫다.)
+    """
+    if not stop_after:
+        return False
+    try:
+        limit = datetime.fromisoformat(str(stop_after))
+    except (TypeError, ValueError):
+        return False
+    return now > limit

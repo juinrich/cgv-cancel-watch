@@ -289,6 +289,11 @@ def main() -> int:
                     prev.update(cur)
                     seat_state.save(STATE_PATH, prev)
 
+            # 상시 실행용 — 종료 시각이 지나면 루프에서 빠져나온다.
+            if seat_state.expired(stop_at, datetime.now(KST)):
+                log("감시 종료 시각 도달 — 종료한다")
+                break
+
             remain = deadline - time.time()
             if remain <= 0:
                 break
