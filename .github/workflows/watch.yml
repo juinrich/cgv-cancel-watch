@@ -1,0 +1,38 @@
+name: CGV 취소표 감시
+
+on:
+  schedule:
+    # Actions cron은 최소 5분이고 지연도 잦다.
+    # 그래서 15분마다 깨우고, 각 실행이 내부에서 1분 주기로 14분간 돈다.
+    - cron: "*/15 * * * *"
+  workflow_dispatch:        # 수동 실행 버튼
+
+concurrency:
+  group: cgv-watch
+  cancel-in-progress: true  # 이전 실행이 멈춰 있으면 새 실행이 넘겨받는다
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 16
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 의존성 설치
+        run: |
+          pip install playwright
+          playwright install --with-deps chromium
+
+      - name: 감시 실행
+        env:
+          NTFY_TOPIC:      ${{ secrets.NTFY_TOPIC }}
+          TELEGRAM_TOKEN:  ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          LOOP_MINUTES: "14"
+          POLL_SECONDS: "60"
+        run: python watch.py
