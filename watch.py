@@ -213,13 +213,14 @@ def main() -> int:
         page = ctx.new_page()
 
         try:
-            page.goto(HOME, wait_until="domcontentloaded", timeout=45000)
+            # 콜드 세션 첫 요청 403을 재시도로 흡수한다 (cgv_net 참고)
+            goto_ok(page, HOME, log=log)
             head = page.evaluate(
                 "document.body ? document.body.innerText.slice(0,200) : ''"
             )
             if "비정상적으로" in head or "이용이 제한" in head:
                 raise RuntimeError("Cloudflare 차단 페이지에 걸림")
-        except (PWError, RuntimeError) as e:
+        except (PWError, NavBlocked, RuntimeError) as e:
             log(f"!! 초기 접속 실패: {e}")
             push("⚠️ CGV 감시기 접속 실패", str(e))
             return 1

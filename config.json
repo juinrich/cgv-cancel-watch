@@ -2,11 +2,14 @@
   "label": "오디세이 · 용산 IMAX",
   "siteNo": "0013",
   "siteNm": "CGV 용산아이파크몰",
-  "movNo": "",
+  "movNo": "30001323",
   "movNm": "오디세이",
   "scnYmd": "20261006",
   "screen_match": "IMAX",
-  "target_times": ["1430", "1800"],
+  "target_times": [
+    "1430",
+    "1800"
+  ],
   "alert_cooldown_sec": 600,
   "stop_after": "2026-10-06T18:30:00+09:00"
 }

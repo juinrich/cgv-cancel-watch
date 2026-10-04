@@ -18,6 +18,8 @@ import urllib.error
 
 from playwright.sync_api import sync_playwright
 
+from cgv_net import goto_ok, NavBlocked
+
 BOOK_URL = "https://cgv.co.kr/cnm/movieBook/movie"
 UA = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
@@ -82,6 +84,7 @@ def push(text: str) -> None:
 
 def main() -> int:
     found: dict[str, str] = {}
+    diag: dict = {"all": 0, "json": 0}
 
     with sync_playwright() as p:
         browser = p.chromium.launch(
@@ -98,9 +101,11 @@ def main() -> int:
         page = ctx.new_page()
 
         def on_response(res):
+            diag["all"] += 1
             ct = (res.headers or {}).get("content-type", "")
             if "json" not in ct.lower():
                 return
+            diag["json"] += 1
             try:
                 walk(res.json(), found)
             except Exception:
@@ -108,14 +113,22 @@ def main() -> int:
 
         page.on("response", on_response)
 
-        page.goto(BOOK_URL, wait_until="networkidle", timeout=60000)
+        # 콜드 세션의 첫 요청은 Actions IP에서 403이 된다 → 재시도 필수 (cgv_net 참고)
+        goto_ok(page, BOOK_URL, wait_until="networkidle", timeout=60000,
+                log=lambda m: print(m, flush=True))
         page.wait_for_timeout(5000)   # 늦게 오는 응답까지 수집
+
+        diag["title"] = page.title()
+        diag["html"] = len(page.content())
 
         ctx.close()
         browser.close()
 
     if not found:
-        msg = "movNo를 하나도 못 찾았다. Cloudflare에 막혔거나 페이지 구조가 바뀜."
+        # 추측하지 않는다 — 관측값만 적는다.
+        msg = (f"movNo 0건. 페이지는 열렸으나(제목={diag.get('title')!r}, "
+               f"HTML {diag.get('html')}바이트) JSON 응답 {diag.get('json')}건에 "
+               f"movNo/movNm 쌍이 없었음. 응답 총 {diag.get('all')}건.")
         print(msg)
         push(msg)
         return 1
@@ -136,4 +149,9 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except NavBlocked as e:
+        print(f"CGV 진입 실패: {e}")
+        push(f"CGV 진입 실패: {e}")
+        raise SystemExit(1)
