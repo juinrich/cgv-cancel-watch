@@ -23,6 +23,15 @@ jobs:
         with:
           python-version: "3.12"
 
+      # 실행이 15분 토막으로 끊기므로, 잔여석 기록을 캐시로 넘겨받는다.
+      # 기록이 없으면 그 실행은 기준선만 잡고 알리지 않는다(= 오탐 방지).
+      - name: 이전 잔여석 기록 복원
+        uses: actions/cache/restore@v4
+        with:
+          path: state
+          key: cgv-seats-${{ github.run_id }}
+          restore-keys: cgv-seats-
+
       - name: 의존성 설치
         run: |
           pip install playwright
@@ -36,3 +45,10 @@ jobs:
           LOOP_MINUTES: "14"
           POLL_SECONDS: "60"
         run: python watch.py
+
+      - name: 잔여석 기록 저장
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: state
+          key: cgv-seats-${{ github.run_id }}

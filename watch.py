@@ -21,8 +21,13 @@ from zoneinfo import ZoneInfo
 
 from playwright.sync_api import sync_playwright, Error as PWError
 
+import seat_state
+from cgv_net import goto_ok, NavBlocked
+
 BASE = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(BASE, "config.json")
+STATE_PATH = (os.environ.get("STATE_PATH")
+              or os.path.join(BASE, "state", "seats.json"))
 KST = ZoneInfo("Asia/Seoul")
 
 HOME = "https://cgv.co.kr/"
@@ -196,6 +201,10 @@ def main() -> int:
     deadline = time.time() + LOOP_MINUTES * 60
     fails = 0
 
+    # 이전 실행이 남긴 잔여석 기록 — 증가분만 알리기 위한 기준선.
+    prev = seat_state.load(STATE_PATH)
+    log(f"이전 기록 {len(prev)}건 로드 ({STATE_PATH})")
+
     with sync_playwright() as p:
         browser = p.chromium.launch(
             headless=True,
@@ -247,25 +256,38 @@ def main() -> int:
                     log("대상 회차 미발견 — movNo/날짜/시간/IMAX 조건 확인 필요")
                 else:
                     now = time.time()
-                    for start, s in sorted(targets.items()):
-                        free, total = s["free"], s["total"]
+                    cur = {}
+                    for start, row in sorted(targets.items()):
+                        free, total = row["free"], row["total"]
                         log(f"{hhmm(start)}  잔여 {free}/{total}석")
+                        cur[f"{ymd}|{start}"] = free
 
-                        if free < 1:
-                            continue
+                    # 잔여석이 '늘어난' 회차만 = 누군가 취소한 회차
+                    for key, before, after in seat_state.rising(prev, cur):
+                        start = key.split("|")[1]
                         if now - last_alert.get(start, 0) < cooldown:
+                            log(f"    {hhmm(start)} {before}->{after}석 증가 — 쿨다운 중 생략")
                             continue
 
                         last_alert[start] = now
+                        row = targets[start]
                         d = ymd
                         push(
-                            f"🎟 취소표 {free}석 — {s.get('movNm') or cfg.get('movNm')}",
-                            f"{s.get('siteNm') or cfg.get('siteNm')} "
-                            f"{s.get('expoScnsNm') or s.get('scnsNm')}\n"
+                            f"🎟 취소표 떴다 +{after - before}석 — "
+                            f"{row.get('movNm') or cfg.get('movNm')}",
+                            f"{row.get('siteNm') or cfg.get('siteNm')} "
+                            f"{row.get('expoScnsNm') or row.get('scnsNm')}\n"
                             f"{d[:4]}-{d[4:6]}-{d[6:]} {hhmm(start)}\n"
-                            f"잔여 {free}/{total}석",
+                            f"잔여 {before} → {after}석\n"
+                            f"좋은 자리인지는 직접 확인하세요",
                         )
-                        log(f">>> 알림 발송: {hhmm(start)} {free}석")
+                        log(f">>> 알림 발송: {hhmm(start)} {before}->{after}석")
+
+                    if not prev:
+                        log("    (기준선 없음 — 이번엔 기록만 하고 알리지 않는다)")
+
+                    prev.update(cur)
+                    seat_state.save(STATE_PATH, prev)
 
             remain = deadline - time.time()
             if remain <= 0:
