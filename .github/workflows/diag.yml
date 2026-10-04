@@ -16,4 +16,4 @@ jobs:
           pip install playwright
           playwright install --with-deps chromium
       - name: 진단
-        run: python diag2.py
+        run: python diag3.py
