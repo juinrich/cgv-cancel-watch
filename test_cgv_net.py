@@ -60,6 +60,26 @@ def main():
     p = FakePage([RuntimeError("timeout"), 200])
     ok &= check("goto 예외 후에도 재시도해 통과한다", goto_ok(p, "x") == 200)
 
+    # 5. Actions 실측 최악 패턴: 403이 길게 이어진 뒤 통과 (예열 구간)
+    p = FakePage([403, 403, 403, 403, 403, 200])
+    ok &= check("403 5연속 뒤 200도 버틴다 (기본 tries로)",
+                goto_ok(p, "x") == 200)
+
+    # 6. required=False 면 끝까지 막혀도 예외 없이 status를 돌려준다
+    #    (watch.py 는 진입 실패해도 루프의 API fetch 재시도로 복구 가능하므로
+    #     여기서 죽으면 안 된다 — 1차 수정이 watch.py 를 망가뜨린 지점)
+    p = FakePage([403] * 10)
+    try:
+        r = goto_ok(p, "x", tries=10, required=False)
+        ok &= check("required=False 면 예외 대신 403을 돌려준다", r == 403)
+    except NavBlocked:
+        ok &= check("required=False 면 예외 대신 403을 돌려준다", False)
+
+    # 7. 재시도 간격이 점점 늘어난다 (고정 2초로는 예열을 못 버텀)
+    p = FakePage([403, 403, 403, 200])
+    goto_ok(p, "x")
+    ok &= check("백오프가 누적 대기 6초를 넘는다", p.slept > 6000)
+
     print("\n결과:", "전부 통과" if ok else "실패 있음")
     return 0 if ok else 1
 

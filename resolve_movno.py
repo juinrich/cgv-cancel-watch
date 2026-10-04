@@ -113,10 +113,17 @@ def main() -> int:
 
         page.on("response", on_response)
 
-        # 콜드 세션의 첫 요청은 Actions IP에서 403이 된다 → 재시도 필수 (cgv_net 참고)
-        goto_ok(page, BOOK_URL, wait_until="networkidle", timeout=60000,
-                log=lambda m: print(m, flush=True))
-        page.wait_for_timeout(5000)   # 늦게 오는 응답까지 수집
+        # Cloudflare 예열 구간(초반 403)을 재시도로 흡수한다 (cgv_net 참고).
+        # 진입에 성공해도 예열 중이면 하위 API 응답이 403이 섞여 0건이 될 수 있으므로,
+        # 수집 결과가 비면 페이지를 다시 읽는다.
+        for attempt in range(1, 4):
+            goto_ok(page, BOOK_URL, wait_until="networkidle", timeout=60000,
+                    log=lambda m: print(m, flush=True))
+            page.wait_for_timeout(5000)   # 늦게 오는 응답까지 수집
+            if found:
+                break
+            print(f"수집 0건 — 페이지 재읽기 {attempt}/3", flush=True)
+            page.wait_for_timeout(4000)
 
         diag["title"] = page.title()
         diag["html"] = len(page.content())

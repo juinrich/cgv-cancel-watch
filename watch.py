@@ -213,8 +213,10 @@ def main() -> int:
         page = ctx.new_page()
 
         try:
-            # 콜드 세션 첫 요청 403을 재시도로 흡수한다 (cgv_net 참고)
-            goto_ok(page, HOME, log=log)
+            # Cloudflare 예열 구간(초반 403)을 재시도로 흡수한다.
+            # required=False — 진입을 못 해도 아래 루프의 API 재시도로 복구된다.
+            # 실측: 예열 후 searchSchByMov 20/20 성공 (cgv_net 참고)
+            goto_ok(page, HOME, log=log, required=False)
             head = page.evaluate(
                 "document.body ? document.body.innerText.slice(0,200) : ''"
             )
